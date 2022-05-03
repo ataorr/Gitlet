@@ -1,0 +1,25 @@
+# My test for the gitlet add commit command
+> init
+<<<
++ Hello.txt wug.txt
+> add Hello.txt
+<<<
+> status
+=== Branches ===
+\*master
+
+=== Staged Files ===
+Hello.txt
+
+=== Removed Files ===
+
+=== Modifications Not Staged For Commit ===
+
+=== Untracked Files ===
+
+<<<*
+> commit "Add hello.txt"
+<<<
+I blank-status.inc
+
+

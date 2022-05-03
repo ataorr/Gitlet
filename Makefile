@@ -32,14 +32,14 @@ TESTER_FLAGS =
 RMAKE = "$(MAKE)"
 
 # Targets that don't correspond to files, but are to be treated as commands.
-.PHONY: default check integration unit clean style
+.PHONY: default check acceptance unit clean style
 
 default:
 	$(RMAKE) -C $(PACKAGE) default
 
-check: integration unit
+check: acceptance unit
 
-integration: default
+acceptance: default
 	$(RMAKE) -C testing PYTHON=$(PYTHON) TESTER_FLAGS="$(TESTER_FLAGS)" check
 
 unit: default

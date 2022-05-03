@@ -1,4 +1,3 @@
-# Standard commands and definitions
 > init
 <<<
 D DATE "Date: \w\w\w \w\w\w \d+ \d\d:\d\d:\d\d \d\d\d\d [-+]\d\d\d\d"

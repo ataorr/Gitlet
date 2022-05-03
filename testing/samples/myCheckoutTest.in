@@ -1,0 +1,36 @@
+# My test for gitlet checkout
+> init
+<<<
++ hello.txt wug.txt
+> add "hello.txt"
+<<<
+> commit "Add hello.txt"
+<<<
+> branch new
+<<<
+> status
+=== Branches ===
+\*master
+new
+
+=== Staged Files ===
+
+=== Removed Files ===
+
+=== Modifications Not Staged For Commit ===
+
+=== Untracked Files ===
+
+<<<*
++ cs61b.txt notwug.txt
+> add "cs61b.txt"
+<<<
+> commit "add 61b"
+<<<
+> checkout new
+<<<
+* cs61b.txt
+= hello.txt wug.txt
+
+
+

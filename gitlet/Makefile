@@ -37,7 +37,7 @@ CPATH = "..:$(CLASSPATH):;..;$(CLASSPATH)"
 # All .java files in this directory.
 SRCS := $(wildcard *.java)
 
-.PHONY: default check clean style
+.PHONY: default check clean style acceptance unit
 
 # As a convenience, you can compile a single Java file X.java in this directory
 # with 'make X.class'
@@ -45,7 +45,10 @@ SRCS := $(wildcard *.java)
 	javac $(JFLAGS) -cp $(CPATH) $<
 
 # First, and therefore default, target.
-default: sentinel
+default: compile
+
+compile: $(SRCS)
+	javac $(JFLAGS) -cp $(CPATH) $(SRCS)
 
 style: default
 	$(STYLEPROG) $(SRCS) 
@@ -53,8 +56,8 @@ style: default
 check:
 	$(RMAKE) -C .. PYTHON=$(PYTHON) check
 
-integration:
-	$(RMAKE) -C .. PYTHON=$(PYTHON) integration
+acceptance:
+	$(RMAKE) -C .. PYTHON=$(PYTHON) acceptance
 
 unit: default
 	java -ea -cp $(CPATH) gitlet.UnitTest
@@ -63,8 +66,4 @@ unit: default
 clean:
 	$(RM) *~ *.class sentinel
 
-### DEPENDENCIES ###
 
-sentinel: $(SRCS)
-	javac $(JFLAGS) -cp $(CPATH) $(SRCS)
-	touch sentinel

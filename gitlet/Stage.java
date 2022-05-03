@@ -1,88 +1,100 @@
 package gitlet;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Set;
 
-/** Represents a Staging Area that can be serialized.
- *  @author Amit Bhat
- */
+
+/** This is the stage class of gitlet.
+ * Stage class hold the add files and remove files
+ * for the next commit.
+ * @author Shantao Ru
+ * */
 public class Stage implements Serializable {
 
-    /** Name of Stage. */
-    private String _name;
+    /** Directory of the stage file. */
+    static final File STAGE_FILE = Utils.join(Gitlet.GITLET_FILE, "stage");
 
-    /** Files currently in Stage. */
-    private HashMap<String, String> _files;
+    /** Map that include the file and the filename.
+     * HashMap<String filename, File boldFile>
+     */
+    private HashMap<String, File> addingfiles;
 
-    /** Instantiates a Stage object with name NAME.*/
-    public Stage(String name) {
-        _name = name;
-        _files = new HashMap<>();
+    /** Map that include the removed files. */
+    private HashMap<String, File> removefiles;
+
+
+    /** Initialize the stage file. */
+    public static void init() throws IOException {
+        if (!STAGE_FILE.exists()) {
+            STAGE_FILE.createNewFile();
+        }
+        Stage stage = new Stage();
+        Utils.writeObject(Stage.STAGE_FILE, stage);
     }
 
-    /** Adds a Blob BLOB to this Stage's files. */
-    public void add(Blob blob) {
-        _files.put(blob.getName(), blob.hash());
+    /** Constructor for stage. */
+    public Stage() {
+        addingfiles = new HashMap<>();
+        removefiles = new HashMap<>();
     }
 
-    /** Returns the name of the file representing the Blob
-     *  with name S. */
-    public String get(String s) {
-        return _files.get(s);
+    /** Add track file to stage.
+     * @param name name of the file
+     * @param file blob file of the target file*/
+    public void addFile(String name, File file) {
+        addingfiles.put(name, file);
     }
 
-    /** Returns the names of  all the Blobs in Stage. */
-    public Set<String> getKeys() {
-        return _files.keySet();
-    }
-    /** Returns the file names of the files that represent
-     *  all the Blobs in this Stage. */
-    public Collection<String> getValues() {
-        return _files.values();
+    /** Add remove file to stage.
+     * @param name name of the remove file
+     * @param file the location of the rm file*/
+    public void addrmFile(String name, File file) {
+        removefiles.put(name, file);
     }
 
-    /** Returns true if this Stage contains the Blob with name FILENAME. */
-    public boolean contains(String fileName) {
-        return _files.containsKey(fileName);
+    /** Return addFiles. */
+    public HashMap<String, File> getAddingfiles() {
+        return addingfiles;
     }
 
-    /** Returns true if this Stage contains Blob BLOB. */
-    public boolean contains(Blob blob) {
-        return _files.containsValue(blob.hash());
+    /** Return rmFiles. */
+    public HashMap<String, File> getRemovefiles() {
+        return removefiles;
     }
 
-    /** Returns true if this Stage contains no files. */
+    /** Clear AddingFiles. */
+    public void clearStage() {
+        addingfiles.clear();
+        removefiles.clear();
+    }
+
+    /** Determine if the file have been tracked.
+     * @return true of filename is in add stage.
+     * @param fileName filename of the search file */
+    public boolean contain(String fileName) {
+        return addingfiles.containsKey(fileName);
+    }
+
+    /** Get bold file.
+     * @param name filename of the target file
+     * @return blob file of the given filename */
+    public File getBolb(String name) {
+        return addingfiles.get(name);
+    }
+
+    /** Get current blod file with the key.
+     * @param key file name of the target file
+     * @return blob file base on the given name */
+    public File getBoldfile(String key) {
+        return addingfiles.get(key);
+    }
+
+    /** Determine if stage is empty.
+     * @return if the stage is empty. */
     public boolean isEmpty() {
-        return _files.isEmpty();
-    }
-
-    /** Removes Blob BLOB from this Stage. */
-    public void remove(Blob blob) {
-        _files.remove(blob.getName());
-    }
-
-    /** Removes Blob with name FILENAME from this Stage. */
-    public void remove(String fileName) {
-        _files.remove(fileName);
-    }
-
-    /** Removes all Blobs from this Stage. */
-    public void removeAll() {
-        _files.clear();
-    }
-
-    /** Writes thisStage to a file with path FILE. */
-    public void writeStageToFile(File file) {
-        Utils.writeObject(file, this);
-    }
-
-    /** Takes in file with path FILE and returns the
-     *  Stage serialized into that file. */
-    public static Stage readFileAsStage(File file) {
-        return Utils.readObject(file, Stage.class);
+        return (addingfiles.isEmpty() && removefiles.isEmpty());
     }
 
 }

@@ -1,26 +1,22 @@
 import sys, re
 from subprocess import \
-     check_output, PIPE, STDOUT, DEVNULL, CalledProcessError, TimeoutExpired
-from os.path import abspath, basename, dirname, exists, join, splitext
+    check_output, PIPE, STDOUT, DEVNULL, CalledProcessError, TimeoutExpired
+from os.path import abspath, basename, dirname, exists, join, splitext, isdir
 from getopt import getopt, GetoptError
 from os import chdir, environ, getcwd, mkdir, remove, access, W_OK
 from shutil import copyfile, rmtree
 from math import log
+from glob import glob
 
 SHORT_USAGE = """\
-Usage: python3 tester.py OPTIONS TEST.in ...
-
+Usage: python3 runner.py OPTIONS TEST.in ...
    OPTIONS may include
-       --show=N       Show details on up to N tests.
-       --show=all     Show details on all tests.
        --keep         Keep test directories
-       --progdir=DIR  Directory or JAR files containing gitlet application
+       --lib=DIR   Relative path to directory containing CS61BL libraries
        --timeout=SEC  Default number of seconds allowed to each execution
                       of gitlet.
        --src=SRC      Use SRC instead of "src" as the subdirectory containing
                       files referenced by + and =.
-       --debug        Allows you to step through commands one by one and
-                      attach a remote debugger
        --tolerance=N  Set the maximum allowed edit distance between program
                       output and expected output to N (default 3).
        --verbose      Print extra information about execution.
@@ -86,18 +82,49 @@ TEST.dir).
 When finished, reports number of tests passed and failed, and the number of
 faulty TEST.in files."""
 
+
+DIRECTORY_LAYOUT_ERROR = """\
+Your {} folder is not where we expected it. Please ensure that your directory
+structure matches the following:
+
+sp21-s***
+  ├── library-sp21
+  │    └── ...
+  ├── proj2
+  │   ├── gitlet
+  │   ├── testing <==== This should be your CWD
+  │   │    ├── runner.py
+  │   │    └── ...
+  │   └── ...
+  └── ...
+
+Note your CWD must be `repo/proj2/testing`"""
+
+JAVA_COMMAND = "java"
+CAPERS_COMMAND = "gitlet.Main"
+JAVAC_COMMAND = "javac -d ."
+JVM_COMMAND = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"
 TIMEOUT = 10
-
-JAVA_COMMAND = "java -ea"
-GITLET_CLASS = "gitlet.Main"
-JVM_OPTIONS = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"
-
 DEBUG = False
 DEBUG_MSG = \
-    """You are in debug mode.
-    In this mode, you will be shown each command from the test case.
-    If you would like to step into and debug the command, type 's'. Once you have done so, go back to IntelliJ and click the debug button.
-    If you would like to move on to the next command, type 'n'."""
+    """
+   ============================================================================
+  |                   ~~~~~  You are in debug mode  ~~~~~                      |
+  |   In this mode, you will be shown each command from the test case.         |
+  |                                                                            |
+  |   There are three commands:                                                |
+  |                                                                            |
+  |   1. 'n' - type in 'n' to go to the next command without debugging the     |
+  |            current one (analogous to "Step Over" in IntelliJ).             |
+  |                                                                            |
+  |   2. 's' - type in 's' to debug the current command (analogous to          |
+  |            "Step Into" in IntelliJ). Make sure to set breakpoints!         |
+  |                                                                            |
+  |   3. 'q' - type in 'q' to quit and stop debugging. If you had the `--keep` |
+  |            flag, then your directory state will be saved and you can       |
+  |            investigate it.                                                 |
+   ============================================================================
+"""
 
 def Usage():
     print(SHORT_USAGE, file=sys.stderr)
@@ -129,6 +156,14 @@ def editDistance(s1, s2):
                              dist[i-1][j-1] + (s1[i-1] != s2[j-1]))
     return dist[len(s1)][len(s2)]
 
+def nextCommand(full_cmnd, timeout):
+    return check_output(full_cmnd, shell=True, universal_newlines=True,
+                        stdin=DEVNULL, stderr=STDOUT, timeout=timeout)
+def stepIntoCommand(full_cmnd):
+    out = check_output(full_cmnd, shell=True, universal_newlines=True,
+                       stdin=DEVNULL, stderr=STDOUT, timeout=None)
+    return out.split("\n", 1)[1]
+
 def createTempDir(base):
     for n in range(100):
         name = "{}_{}".format(base, n)
@@ -156,27 +191,46 @@ def doCopy(dest, src, dir):
     except OSError:
         raise ValueError("file {} could not be copied to {}".format(src, dest))
 
-def doExecute(cmnd, dir, timeout, line_num):
+def doCompile(target):
+    out = ""
+    try:
+        full_cmnd = "{} {}".format(JAVAC_COMMAND, target)
+        out = check_output(full_cmnd, shell=True, universal_newlines=True,
+                           stdin=DEVNULL, stderr=STDOUT)
+        return "OK", out
+    except CalledProcessError as excp:
+        return ("javac exited with code {}".format(excp.args[0]),
+                excp.output)
+
+def doExecute(cmnd, dir, timeout):
     here = getcwd()
     out = ""
     try:
         chdir(dir)
-        full_cmnd = "{} {} {}".format(JAVA_COMMAND, GITLET_CLASS, cmnd)
-        skip_first_line = False
+        full_cmnd = "{} {} {}".format(JAVA_COMMAND, CAPERS_COMMAND, cmnd)
 
         if DEBUG:
-            print("[line {}]: gitlet {}".format(line_num, cmnd))
-            input_prompt = ">>> "
-            next_cmd = input(input_prompt)
-            while(next_cmd not in "ns"):
+            print(">>> gitlet {}".format(cmnd))
+            next_cmd = input("> ").strip().lower()
+            while(next_cmd not in {'s', 'n', 'q'}):
                 print("Please enter either 'n' or 's'.")
-                next_cmd = input(input_prompt)
+                next_cmd = input("> ").strip().lower()
 
-            if next_cmd == "s":
-                full_cmnd = "{} {} {} {}".format(JAVA_COMMAND, JVM_OPTIONS, GITLET_CLASS, cmnd)
-                timeout, skip_first_line = None, True
+            if next_cmd == "n":
+                out = nextCommand(full_cmnd, timeout)
+            elif next_cmd == "s":
+                full_cmnd = "{} {} {} {}".format(JAVA_COMMAND, JVM_COMMAND, CAPERS_COMMAND, cmnd)
+                print(f"Ready to debug the command `gitlet {cmnd}`")
+                print("Open IntelliJ and hit the \"Debug\" button. Don't forget to set a breakpoint!")
+                out = stepIntoCommand(full_cmnd)
+            elif next_cmd == "q":
+                return "User Exit", None
+        else:
+            out = nextCommand(full_cmnd, timeout)
 
-        out = doCommand(full_cmnd, timeout, skip_first_line)
+        if superverbose:
+            print(out)
+
         return "OK", out
     except CalledProcessError as excp:
         return ("java gitlet.Main exited with code {}".format(excp.args[0]),
@@ -185,14 +239,6 @@ def doExecute(cmnd, dir, timeout, line_num):
         return "timeout", None
     finally:
         chdir(here)
-
-def doCommand(full_cmnd, timeout, skip_first_line=False):
-    out = check_output(full_cmnd, shell=True, universal_newlines=True,
-                        stdin=DEVNULL, stderr=STDOUT, timeout=timeout)
-    if skip_first_line:
-        out = out.split("\n", 1)[1]
-
-    return out
 
 def canonicalize(s):
     if s is None:
@@ -217,7 +263,7 @@ def correctProgramOutput(expected, actual, last_groups, is_regexp):
     if is_regexp:
         try:
             if not Match(expected.rstrip() + r"\Z", actual) \
-                   and not Match(expected.rstrip() + r"\Z", actual.rstrip()):
+                    and not Match(expected.rstrip() + r"\Z", actual.rstrip()):
                 return False
         except:
             raise ValueError("bad pattern")
@@ -270,15 +316,10 @@ def line_reader(f, prefix):
 def doTest(test):
     last_groups = []
     base = splitext(basename(test))[0]
-    print("{}: ".format(base), end="")
+    print("{}:".format(base), end=" \n")
     cdir = tmpdir = createTempDir(base)
-
     if verbose:
         print("Testing directory: {}".format(tmpdir))
-
-    if DEBUG:
-        print(DEBUG_MSG)
-
     timeout = TIMEOUT
     defns = {}
 
@@ -351,7 +392,7 @@ def doTest(test):
                         is_regexp = Group(1)
                         break
                     expected.append(do_substs(L))
-                msg, out = doExecute(cmnd, cdir, timeout, line_num)
+                msg, out = doExecute(cmnd, cdir, timeout)
                 if verbose:
                     if out:
                         print(re.sub(r'(?m)^', '- ', chop_nl(out)))
@@ -359,7 +400,10 @@ def doTest(test):
                     if not correctProgramOutput(expected, out, last_groups,
                                                 is_regexp):
                         msg = "incorrect output"
-                if msg != "OK":
+                elif msg == "User Exit":
+                    print("Exiting Debug mode ...")
+                    break
+                if msg != 'OK':
                     print("ERROR ({})".format(msg))
                     reportDetails(test, included_files, line_num)
                     return False
@@ -387,41 +431,44 @@ def doTest(test):
     finally:
         if not keep:
             cleanTempDir(tmpdir)
+        else:
+            print(f"\nDirectory state saved in {tmpdir}")
 
 if __name__ == "__main__":
     show = None
     keep = False
     prog_dir = None
+    lib_dir = None
     verbose = False
+    superverbose = False
     src_dir = 'src'
-    output_tolerance = 3
+    gitlet_dir = join(dirname(abspath(getcwd())), "gitlet")
+    output_tolerance = 0
 
     try:
         opts, files = \
             getopt(sys.argv[1:], '',
-                   ['show=', 'keep', 'progdir=', 'verbose', 'src=',
-                    'tolerance=', 'debug'])
+                   ['show=', 'keep', 'lib=', 'verbose', 'src=',
+                    'tolerance=', 'superverbose', 'debug'])
         for opt, val in opts:
             if opt == '--show':
-                val = val.lower()
-                if re.match(r'-?\d+', val):
-                    show = int(val)
-                elif val == 'all':
-                    show = val
-                else:
-                    Usage()
+                show = int(val)
             elif opt == "--keep":
                 keep = True
-            elif opt == "--progdir":
-                prog_dir = val
+            elif opt == "--lib":
+                lib_dir = val
             elif opt == "--src":
-                src_dir = abspath(val)
+                src_dir = val
             elif opt == "--verbose":
                 verbose = True
             elif opt == "--tolerance":
                 output_tolerance = int(val)
+            elif opt == "--superverbose":
+                superverbose = True
             elif opt == "--debug":
                 DEBUG = True
+                TIMEOUT = 100000
+
         if prog_dir is None:
             prog_dir = abspath(getcwd())
             k = 10
@@ -446,9 +493,16 @@ if __name__ == "__main__":
         environ['CLASSPATH'] = "{}:{}".format(prog_dir, environ['CLASSPATH'])
         JAVA_COMMAND = 'exec ' + JAVA_COMMAND
 
+    matching_files = []
+    for path in files:
+        matching_files += glob(path)
+    files = matching_files
+
     num_tests = len(files)
     errs = 0
     fails = 0
+
+    print(DEBUG_MSG)
 
     for test in files:
         try:
@@ -461,6 +515,8 @@ if __name__ == "__main__":
         except ValueError as excp:
             print("FAILED ({})".format(excp.args[0]))
             fails += 1
+
+    cleanTempDir(join(abspath(getcwd()), "gitlet"))
 
     print()
     print("Ran {} tests. ".format(num_tests), end="")

@@ -3,238 +3,134 @@ package gitlet;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
-/** Represents a Commit that can be serialized.
- *  @author Amit Bhat
+
+/** This is the Commit class of the gitlet.
+ * Commits were store under the directory
+ * .getlet/Commit, filename will be their commidID
+ * @author Shantao Ru
  */
 public class Commit implements Serializable {
 
-    /** Large value to indicate that path between two commits doesn't
-     *  exist. */
-    static final int DIST_OF_BAD_PATH = Integer.MAX_VALUE - 100;
+    /** directory of commit file. */
+    static final File COMMIT_FILE = Utils.join(Gitlet.GITLET_FILE, "commit");
 
-    /** Date of Commit. */
-    private Date commitTime;
+    /** Timestamp for this commit. */
+    private String timestamp;
 
-    /** Message of Commit. */
-    private String _message;
+    /** Message for this commit. */
+    private String message = new String();
 
-    /** Files tracked by Commit. */
-    private HashMap<String, String> _files;
+    /** Hashmap that hold the commit files bolb hashcode.
+     * HashMap<FileName, BoldFile>
+     */
+    private HashMap<String, File> files = new HashMap<>();
 
-    /** Parent of Commit. */
-    private String _firstParent;
+    /** parent of this commit. */
+    private File parent = null;
 
-    /** Second parent of Commit.
-     *  Only in Merge cases. */
-    private String _secondParent;
+    /** parent 2 of this commit. */
+    private File parent2 = null;
 
-    /** Instantiates a Commit object with message MESSAGE, time TIME,
-     * parent FIRSTPARENT, and second parent SECONDPARENT. */
-    public Commit(String message, Date time,
-                  String firstParent, String secondParent) {
-        _message = message;
-        commitTime = time;
-        _firstParent = firstParent;
-        _secondParent = secondParent;
-        _files = new HashMap<>();
+    /** Constructor of commit class.
+     * @param gievnMessage commit message
+     * @param gievnParent commit parent
+     * @param giveTime  timestamp of commit
+     * */
+    public Commit(String gievnMessage, String giveTime, File gievnParent) {
+        message = gievnMessage;
+        parent = gievnParent;
+        timestamp = giveTime;
     }
 
-    /** Instantiates a Commit object with message MESSAGE, time TIME,
-     * parent FIRSTPARENT. */
-    public Commit(String message, Date time, String firstParent) {
-        this(message, time, firstParent, null);
-    }
-
-    /** Returns a Commit object that is a copy of this Commit but
-     *  with message MESSAGE. */
-    public Commit copy(String message) {
-        Commit copy = new Commit(message, new Date(),
-                _firstParent);
-        copy._files = new HashMap<>();
-        for (String s : _files.keySet()) {
-            copy._files.put(s, _files.get(s));
+    /** Init commit file. */
+    public static void init() throws IOException {
+        if (!COMMIT_FILE.exists()) {
+            COMMIT_FILE.mkdir();
         }
-        return copy;
+        String initTime = "Thu Jan 1 00:00:00 1970 +0000";
+        Commit initCommit = new Commit("initial commit", initTime, null);
+        String sha1Code = Utils.sha1(Utils.serialize(initCommit));
+        File initCommitFile = Utils.join(COMMIT_FILE, sha1Code);
+        Utils.writeObject(initCommitFile, initCommit);
+        Branch master = new Branch("master", initCommitFile);
+        Utils.writeObject(Branch.MASTER_FILE, master);
+        Head head = new Head(Branch.MASTER_FILE, initCommitFile);
+        head.save();
     }
 
-    /** Sets first parent to UID of COMMIT. */
-    public void setFirstParent(Commit commit) {
-        _firstParent = commit.hash();
+    /** Return the tracking file of this commit. */
+    public HashMap<String, File> getFiles() {
+        return files;
     }
 
-    /** Sets second parent to UID of COMMIT. */
-    public void setSecondParent(Commit commit) {
-        _secondParent = commit.hash();
+    /** Add tracking files to the commit.
+     * @param newfiles files form the stage to add.
+     * */
+    public void addFiles(HashMap<String, File> newfiles) {
+        files = newfiles;
     }
 
-    /** Adds all staged files into files. */
-    public void addStagedFiles() {
-        Stage stagedAdditions = Stage.readFileAsStage(GitCommands.ADDITIONS);
-        for (String s : stagedAdditions.getKeys()) {
-            _files.put(s, stagedAdditions.get(s));
-        }
+    /** Return timestamp in string format. */
+    public static String getTimestamp() {
+        SimpleDateFormat time = new SimpleDateFormat();
+        time.applyPattern("EEE MMM d HH:mm:ss yyyy");
+        Date date = new Date();
+        return time.format(date) + " -0800";
     }
 
-    /** Removes all staged removal files from files. */
-    public void removeStagedFiles() {
-        Stage stagedRemovals = Stage.readFileAsStage(GitCommands.REMOVALS);
-        for (String s : stagedRemovals.getKeys()) {
-            _files.remove(s);
-        }
+    /** Return sha1 commitID. */
+    public String commitID() {
+        return Utils.sha1(Utils.serialize(this));
     }
 
-    /** Returns a set containing all the names of files in
-     *  this Commit. */
-    public Set<String> getNames() {
-        return _files.keySet();
-    }
-
-    /** Returns the UID of Blob with name NAME. */
-    public String getUID(String name) {
-        return _files.get(name);
-    }
-
-    /** Returns the Blob with name FILENAME. */
-    public Blob getBlob(String fileName) {
-        String blobHash = _files.get(fileName);
-        File blobFile = Utils.join(GitCommands.BLOBS, blobHash);
-        return Blob.readAsBlob(blobFile);
-    }
-
-    /** Returns this Commit's message. */
+    /** Return commit message of this commit. */
     public String getMessage() {
-        return _message;
+        return message;
     }
 
-    /** Returns the files of this Commit. */
-    public Map<String, String> getFiles() {
-        return _files;
+    /** Return log information of this commit. */
+    public String log() {
+        String output = "===\n";
+        output += "commit " + commitID() + "\n";
+        output += "Date: " + timestamp + "\n";
+        output += message + "\n";
+        return output;
     }
 
-    /** Returns the Date object of this Commit. */
-    public Date getDate() {
-        return commitTime;
+    /** Return parent of this commit. */
+    public File getParent() {
+        return parent;
     }
 
-    /** Returns the UID of this Commit's first parent. */
-    public String getFirstParent() {
-        return _firstParent;
+    /** Return parent2 of this commit. */
+    public File getParent2() {
+        return parent2;
     }
 
-    /** Returns the UID of this Commit's second parent. */
-    public String getSecondParent() {
-        return _secondParent;
+    /** Change parent2 of this commit.
+     * @param file add parent2 file to commit.
+     * */
+    public void changeParent2(File file) {
+        parent2 = file;
     }
 
-    /** Returns distance between COMMIT1 and one of its ancestors on
-     *  the same branch, COMMIT2. */
-    public static int distance(String commit1, String commit2) {
-        if (commit1 == null || commit2 == null) {
-            return DIST_OF_BAD_PATH;
+    /** Return commitFile of this file. */
+    public File getcommitFile() {
+        return Utils.join(COMMIT_FILE, commitID());
+    }
+
+    /** Return require blob files stored in files.
+     * @param filename filename of the given blob
+     * */
+    public File getBlob(String filename) {
+        if (!files.containsKey(filename)) {
+            System.out.println("File does not exist in that commit.");
+            System.out.println(0);
         }
-        if (commit1.equals(commit2)) {
-            return 0;
-        } else {
-            Commit currCommit = Commit.readAsCommit(Utils.join(
-                    GitCommands.COMMITS, commit1));
-            commit1 = currCommit.getFirstParent();
-            int firstParent = 1 + distance(commit1, commit2);
-            int secondParent = DIST_OF_BAD_PATH;
-            if (currCommit._secondParent != null) {
-                secondParent = 1 + distance(currCommit._secondParent, commit2);
-            }
-            return Integer.min(firstParent, secondParent);
-        }
+        return files.get(filename);
     }
-
-    /** Creates and writes this Commit to a file, with
-     *  the name of the file being this Commit's UID. */
-    public void makeCommitFile() throws IOException {
-        File commitFile = Utils.join(GitCommands.COMMITS, hash());
-        commitFile.createNewFile();
-        Utils.writeObject(commitFile, this);
-    }
-
-    /** Returns a String of the contents of the serialized Blob
-     *  with name NAME. */
-    public String readBlobAsString(String name) {
-        String blobID = _files.get(name);
-        File blobFile = Utils.join(GitCommands.BLOBS, blobID);
-        if (!blobFile.exists()) {
-            return "";
-        }
-        return Utils.readContentsAsString(blobFile);
-    }
-
-    /** Takes in file with path FILE and returns the
-     *  Commit serialized into that file. */
-    public static Commit readAsCommit(File file) {
-        return Utils.readObject(file, Commit.class);
-    }
-
-    /** Takes in string ID and returns the
-     *  Commit with that UID. */
-    public static Commit readAsCommit(String id) {
-        return Utils.readObject(
-                Utils.join(GitCommands.COMMITS, id), Commit.class);
-    }
-
-    /** Returns true if this Commit contains Blob BLOB. */
-    public boolean contains(Blob blob) {
-        return _files.containsValue(blob.hash());
-    }
-
-    /** Returns true if this Commit contains a Blob with name
-     *  FILENAME. */
-    public boolean contains(String fileName) {
-        return _files.containsKey(fileName);
-    }
-
-    /** Returns the SHA-1 UID of this Commit. */
-    public String hash() {
-        return Utils.sha1((Object) Utils.serialize(this));
-    }
-
-    @Override
-    public String toString() {
-        String out = hash()  + " "
-                + commitTime + " " + _message
-                + " " + _firstParent;
-        if (_secondParent != null) {
-            out = out + " " + _secondParent;
-        }
-        return out;
-    }
-
-    /** Displays this Commit in the format used by gitCommands.log. */
-    public void displayCommit() {
-        String separator = "===", merge = "";
-        String header, date, message;
-
-        header = "commit " + hash();
-
-        if (getSecondParent() != null) {
-            merge = "Merge: " + getFirstParent().substring(0, 7)
-                    + " " + getSecondParent().substring(0, 7);
-        }
-
-        Date d = getDate();
-        date = "Date: " + String.format("%ta %tb %td %tT %tY %tz",
-                d, d, d, d, d, d);
-        message = getMessage();
-
-        System.out.println(separator);
-        System.out.println(header);
-        if (!merge.equals("")) {
-            System.out.println(merge);
-        }
-        System.out.println(date);
-        System.out.println(message + "\n");
-    }
-
 }

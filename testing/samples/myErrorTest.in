@@ -1,0 +1,15 @@
+# My test for merge cases
+> add "hello.txt"
+Not in an initialized Gitlet directory.
+<<<
+> Gitlet bug
+No command with that name exists.
+<<<
+> init
+<<<
+> add "Hello.txt"
+File does not exists
+<<<
+> checkout "master"
+No need to checkout the current branch
+<<<

@@ -1,58 +1,68 @@
 package gitlet;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 
-/** Represents a Blob that can be serialized.
- *  @author Amit Bhat
+/** This is Blob Class. Which we use it to store the contents of the file.
+ * Blob File are all store in the .getlet/Blob directory.
+ * @author Shantao Ru
  */
 public class Blob implements Serializable {
 
-    /** Name of Blob. */
-    private String _name;
+    /** File directory of this bolbs. */
+    static final File BLOBSFOLDER = Utils.join(Gitlet.GITLET_FILE, "Bolbs");
 
-    /** Serialized contents of Blob. */
-    private byte[] _contents;
+    /** Hashcode of this blob. */
+    private String hashcode;
 
-    /** Instantiates a Blob object with name FILENAME
-     *  and representing file given by path FILE. */
-    public Blob(String fileName, File file) {
-        _name = fileName;
-        _contents = Utils.readContents(file);
+    /** Contents of this blob. */
+    private String contents;
+
+    /** File of this blob. */
+    private File bolbFile;
+
+    /** Constructor of Bolb class.
+     * @param file the file to create blob.
+     */
+    public Blob(File file) {
+        contents = Utils.readContentsAsString(file);
+        hashcode = Integer.toString(contents.hashCode());
+        bolbFile = Utils.join(BLOBSFOLDER, hashcode);
     }
 
-    /** Return this Blob's name. */
-    public String getName() {
-        return _name;
+    /** Init the bold directory. */
+    public static void init() {
+        if (!BLOBSFOLDER.exists()) {
+            BLOBSFOLDER.mkdir();
+        }
     }
 
-    /** Return this Blob's contents. */
-    public byte[] getContents() {
-        return _contents;
+    /** Write this bold to file. */
+    public void writeBold() throws IOException {
+        if (!bolbFile.exists()) {
+            bolbFile.createNewFile();
+        }
+        Utils.writeObject(bolbFile, this);
     }
 
-    /** Return this Blob's contents as a String. */
-    public String getContentsAsString() {
-        return new String(_contents, StandardCharsets.UTF_8);
+    /** Return blobFiles. */
+    public File getBlobFiles() {
+        return bolbFile;
     }
 
-    /** Creates and writes this Blob to a file, with
-     *  the name of the file being this Blob's UID. */
-    public void makeBlobFile() throws IOException {
-        File blobFile = Utils.join(GitCommands.BLOBS, hash());
-        blobFile.createNewFile();
-        Utils.writeObject(blobFile, this);
+    /** Return contents of the blob. */
+    public String getContents() {
+        return contents;
     }
 
-    /** Takes in file with path FILE and returns the
-     *  Blob serialized into that file. */
-    public static Blob readAsBlob(File file) {
-        return Utils.readObject(file, Blob.class);
-    }
-
-    /** Returns the SHA-1 hash of this Blob. */
-    public String hash() {
-        return Utils.sha1((Object) Utils.serialize(this));
+    /** Overwrite the blob to file.
+     * @param target targetFile to overwirte contents.
+     * */
+    public void overwrite(File target) throws IOException {
+        if (!target.exists()) {
+            target.createNewFile();
+        }
+        Utils.writeContents(target, contents);
     }
 }

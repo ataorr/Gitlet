@@ -1,5 +1,5 @@
 # Create two branches and switch between them
-I definitions.in
+I prelude1.inc
 > branch other
 <<<
 + f.txt wug.txt
@@ -25,9 +25,3 @@ E g.txt
 * g.txt
 > checkout master
 <<<
-= f.txt wug.txt
-= g.txt notwug.txt
-> checkout other
-<<<
-= f.txt notwug.txt
-* g.txt
