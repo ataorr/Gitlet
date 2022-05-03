@@ -1,3 +1,3 @@
 # Gitlet
-Tiny Version of Git with basic pull, push, commit, add and etc. operations.
+Developed a mini version-control system, implementing many features in Git such as adding,committing, branching, switching between branches, and merging.
 
